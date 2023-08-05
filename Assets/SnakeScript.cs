@@ -9,6 +9,7 @@ public class SnakeScript : MonoBehaviour
     private bool pendingSegment = false;
     private GameObject[] snakeSegments = new GameObject[100];
     private int segmentCount = 0;
+    private Coroutine gameLoop = null;
 
     public float moveInterval = 5f;
 
@@ -17,7 +18,7 @@ public class SnakeScript : MonoBehaviour
         rb = GetComponent<Rigidbody2D>();
         spriteRenderer = GetComponent<SpriteRenderer>();
         snakeSegments[segmentCount++] = gameObject;
-        StartCoroutine(MoveSnake());
+        gameLoop = StartCoroutine(MoveSnake());
     }
 
 
@@ -77,6 +78,15 @@ public class SnakeScript : MonoBehaviour
         else if (collider2D.CompareTag("SnakeSegment"))
         {
             Debug.Log("Collided with snake!");
+        }
+        else if (collider2D.CompareTag("Wall"))
+        {
+            StopCoroutine(gameLoop);
+            for (var i = 0; i < snakeSegments.Length; i++)
+            {
+                Destroy(snakeSegments[i]);
+                snakeSegments[i] = null;
+            }
         }
     }
 
