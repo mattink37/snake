@@ -1,6 +1,7 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
@@ -11,9 +12,9 @@ public class SnakeScript : MonoBehaviour
     private Rigidbody2D rb = null;
     private SpriteRenderer spriteRenderer = null;
     private Coroutine gameStart = null;
-    private Boolean pendingSegment = false;
+    private bool pendingSegment = false;
 
-    public float moveInterval = 0.5f;
+    public float moveInterval = 5f;
 
     private void Awake()
     {
@@ -34,29 +35,59 @@ public class SnakeScript : MonoBehaviour
         input.Player.Move.performed -= OnMovementPerformed;
     }
 
+    private Vector3[] previousPositions;
+
     private IEnumerator MoveSnake()
     {
         while (true)
         {
-            var snakeyBits = GameObject.FindGameObjectsWithTag("SnakeSegment");
-            Transform previousParentTransform = null;
-            foreach (GameObject snakeyBit in snakeyBits)
+            // Find all active GameObjects in the scene with the "SnakeSegment" tag
+            GameObject[] snakeSegments = GameObject.FindGameObjectsWithTag("SnakeSegment");
+
+            // Initialize previousPositions array
+            if (previousPositions == null || previousPositions.Length != snakeSegments.Length)
             {
-                if (previousParentTransform == null) {
-                    previousParentTransform = snakeyBit.transform;
-                    snakeyBit.GetComponent<Rigidbody2D>().position += moveVector * spriteRenderer.bounds.size.x;
-                } else {
-                    snakeyBit.transform.position = previousParentTransform.position;
-                    previousParentTransform = snakeyBit.transform;
+                previousPositions = new Vector3[snakeSegments.Length];
+            }
+
+            for (int i = 0; i < snakeSegments.Length; i++)
+            {
+                if (snakeSegments.Length < 10)
+                {
+                    pendingSegment = true;
+                }
+
+                if (i == 0)
+                {
+                    // Store previous position
+                    previousPositions[i] = snakeSegments[i].transform.position;
+
+                    // Move first segment
+                    snakeSegments[i].GetComponent<Rigidbody2D>().position += moveVector * spriteRenderer.bounds.size.x;
+                }
+                else
+                {
+                    // Store previous position
+                    previousPositions[i] = snakeSegments[i].transform.position;
+
+                    // Move segment to previous position of previous segment
+                    snakeSegments[i].transform.position = previousPositions[i - 1];
                 }
             }
-            if (pendingSegment) {
-                Grow();
+
+            // Grow the snake if necessary
+            if (pendingSegment)
+            {
+                Grow(snakeSegments[^1].transform);
                 pendingSegment = false;
             }
+
             yield return new WaitForSeconds(moveInterval);
         }
     }
+
+
+
 
     private void FixedUpdate()
     {
@@ -73,10 +104,10 @@ public class SnakeScript : MonoBehaviour
 
     private void OnTriggerEnter2D(Collider2D collider2D)
     {
-        Debug.Log("Collision");
         if (collider2D.CompareTag("Food"))
         {
             Destroy(GameObject.FindWithTag("Food"));
+            Instantiate(Resources.Load("Food"));
             pendingSegment = true;
         }
         else if (collider2D.CompareTag("SnakeSegment"))
@@ -85,11 +116,9 @@ public class SnakeScript : MonoBehaviour
         }
     }
 
-    private void Grow() 
+    private void Grow(Transform parentTransform)
     {
-        GameObject caboose = Instantiate(Resources.Load<GameObject>("SnakeBody"));
-        caboose.transform.SetParent(this.transform, false);
-        caboose.transform.SetSiblingIndex(0);
+        Instantiate(Resources.Load<GameObject>("SnakeBody"), parentTransform);
     }
 
 }
