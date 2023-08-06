@@ -59,7 +59,6 @@ public class SnakeScript : MonoBehaviour
         {
             moveVector = temp;
         }
-        previousDir = moveVector;
     }
 
     private void MoveSnake()
@@ -107,6 +106,7 @@ public class SnakeScript : MonoBehaviour
         while (true)
         {
             MoveSnake();
+            previousDir = moveVector;
             yield return new WaitForSeconds(moveInterval);
         }
     }
@@ -119,11 +119,7 @@ public class SnakeScript : MonoBehaviour
             Instantiate(Resources.Load("Food"));
             pendingSegment = true;
         }
-        else if (collider2D.CompareTag("SnakeSegment"))
-        {
-            Debug.Log("Collided with snake!");
-        }
-        else if (collider2D.CompareTag("Wall"))
+        else if (collider2D.CompareTag("SnakeSegment") || collider2D.CompareTag("Wall"))
         {
             StopCoroutine(currentCoroutine);
             KillSnake();
