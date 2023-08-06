@@ -1,5 +1,7 @@
+using System;
 using System.Collections;
 using UnityEngine;
+using UnityEngine.InputSystem;
 
 public class SnakeScript : MonoBehaviour
 {
@@ -9,7 +11,9 @@ public class SnakeScript : MonoBehaviour
     private bool pendingSegment = false;
     private GameObject[] snakeSegments = new GameObject[100];
     private int segmentCount = 0;
-    private Coroutine gameLoop = null;
+    private Coroutine currentCoroutine = null;
+    private SnakeControls input = null;
+    private Vector2 previousDir;
 
     public float moveInterval = 5f;
 
@@ -18,51 +22,91 @@ public class SnakeScript : MonoBehaviour
         rb = GetComponent<Rigidbody2D>();
         spriteRenderer = GetComponent<SpriteRenderer>();
         snakeSegments[segmentCount++] = gameObject;
-        gameLoop = StartCoroutine(MoveSnake());
+        currentCoroutine = StartCoroutine(GameLoopCoroutine());
+        input = new SnakeControls();
+    }
+
+    private void OnEnable()
+    {
+        input.Enable();
+        input.Player.Move.performed += OnMovementPerformed;
+    }
+    private void OnDisable()
+    {
+        input.Disable();
+        input.Player.Move.performed -= OnMovementPerformed;
+    }
+
+    private void OnMovementPerformed(InputAction.CallbackContext value)
+    {
+        Vector2 temp = value.ReadValue<Vector2>();
+        if (temp == -previousDir)
+        {
+            return;
+        }
+        if (temp.x != 0 && temp.y != 0)
+        {
+            if (previousDir.x != 0)
+            {
+                moveVector = new(0, MathF.Round(temp.y));
+            }
+            else
+            {
+                moveVector = new(MathF.Round(temp.x), 0);
+            }
+        }
+        else
+        {
+            moveVector = temp;
+        }
+        previousDir = moveVector;
+    }
+
+    private void MoveSnake()
+    {
+        for (int i = segmentCount - 1; i >= 0; i--)
+        {
+            if (i == 0)
+            {
+                // move the head
+                snakeSegments[i].GetComponent<Rigidbody2D>().position += moveVector * spriteRenderer.bounds.size.x;
+            }
+            else
+            {
+                // other segments just swap positions
+                snakeSegments[i].transform.position = snakeSegments[i - 1].transform.position;
+            }
+        }
+
+        // Grow the snake if necessary
+        if (pendingSegment)
+        {
+            Grow(snakeSegments[0].transform);
+            pendingSegment = false;
+        }
+    }
+
+    private void KillSnake()
+    {
+        OnDisable();
+        for (var i = 0; i < segmentCount; i++)
+        {
+            GameObject snakeBits = (GameObject)Instantiate(Resources.Load("SnakeBits"));
+            Debug.Log(snakeBits);
+            snakeBits.transform.position = snakeSegments[i].transform.position;
+            snakeBits.GetComponent<ParticleSystem>().Play();
+            Destroy(snakeSegments[i]);
+            snakeSegments[i] = null;
+        }
+        segmentCount = 0;
     }
 
 
-    private IEnumerator MoveSnake()
+    private IEnumerator GameLoopCoroutine()
     {
         while (true)
         {
-            if (Input.GetKey(KeyCode.W) && moveVector != Vector2.down)
-            {
-                moveVector = Vector2.up;
-            }
-            else if (Input.GetKey(KeyCode.D) && moveVector != Vector2.left)
-            {
-                moveVector = Vector2.right;
-            }
-            else if (Input.GetKey(KeyCode.S) && moveVector != Vector2.up)
-            {
-                moveVector = Vector2.down;
-            }
-            else if (Input.GetKey(KeyCode.A) && moveVector != Vector2.right)
-            {
-                moveVector = Vector2.left;
-            }
-            for (int i = segmentCount - 1; i >= 0; i--)
-            {
-                if (i == 0)
-                {
-                    // move the head
-                    snakeSegments[i].GetComponent<Rigidbody2D>().position += moveVector * spriteRenderer.bounds.size.x;
-                }
-                else
-                {
-                    // other segments just swap positions
-                    snakeSegments[i].transform.position = snakeSegments[i - 1].transform.position;
-                }
-            }
-
-            // Grow the snake if necessary
-            if (pendingSegment)
-            {
-                Grow(snakeSegments[0].transform);
-                pendingSegment = false;
-            }
-
+            MoveSnake();
             yield return new WaitForSeconds(moveInterval);
         }
     }
@@ -81,12 +125,8 @@ public class SnakeScript : MonoBehaviour
         }
         else if (collider2D.CompareTag("Wall"))
         {
-            StopCoroutine(gameLoop);
-            for (var i = 0; i < snakeSegments.Length; i++)
-            {
-                Destroy(snakeSegments[i]);
-                snakeSegments[i] = null;
-            }
+            StopCoroutine(currentCoroutine);
+            KillSnake();
         }
     }
 
@@ -94,5 +134,4 @@ public class SnakeScript : MonoBehaviour
     {
         snakeSegments[segmentCount++] = Instantiate(Resources.Load<GameObject>("SnakeBody"), parentTransform);
     }
-
 }
